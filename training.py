@@ -13,8 +13,8 @@ import time
 from utils import play_game, play_game2
 from game_environment import Snake, SnakeNumpy
 import tensorflow as tf
-from agent import DeepQLearningAgent, PolicyGradientAgent,\
-                AdvantageActorCriticAgent, mean_huber_loss
+from agent import DeepQLearningAgent#, PolicyGradientAgent,\
+                #AdvantageActorCriticAgent, mean_huber_loss
 import json
 
 # some global variables
