@@ -14,6 +14,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Softmax, MaxPool2D
 from tensorflow.keras import Model
 from tensorflow.keras.regularizers import l2
+import torch
 # from tensorflow.keras.losses import Huber
 
 def huber_loss(y_true, y_pred, delta=1):
@@ -37,10 +38,10 @@ def huber_loss(y_true, y_pred, delta=1):
         loss values for all points
     """
     error = (y_true - y_pred)
-    quad_error = 0.5*tf.math.square(error)
-    lin_error = delta*(tf.math.abs(error) - 0.5*delta)
+    quad_error = 0.5*torch.square(error)
+    lin_error = delta*(torch.abs(error) - 0.5*delta)
     # quadratic error, linear error
-    return tf.where(tf.math.abs(error) < delta, quad_error, lin_error)
+    return torch.where(torch.abs(error) < delta, quad_error, lin_error)
 
 def mean_huber_loss(y_true, y_pred, delta=1):
     """Calculates the mean value of huber loss
@@ -59,7 +60,7 @@ def mean_huber_loss(y_true, y_pred, delta=1):
     loss : Tensor
         average loss across points
     """
-    return tf.reduce_mean(huber_loss(y_true, y_pred, delta))
+    return torch.mean(huber_loss(y_true, y_pred, delta))
 
 class Agent():
     """Base class for all agents
