@@ -320,6 +320,9 @@ class DeepQLearningAgent(Agent):
         board : Numpy array
             Processed and normalized board
         """
+        if board.ndim == 3:
+            board = board[np.newaxis, ...]
+
         board = board.transpose((0, 3, 1, 2))
 
         if(board.ndim == 3):
