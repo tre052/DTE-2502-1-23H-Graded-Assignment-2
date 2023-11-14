@@ -49,11 +49,6 @@ agent = DeepQLearningAgent(board_size=board_size, frames=frames, n_actions=n_act
 # check in the same order as class hierarchy
 if(isinstance(agent, DeepQLearningAgent)):
     agent_type = 'DeepQLearningAgent'
-if(isinstance(agent, PolicyGradientAgent)):
-    agent_type = 'PolicyGradientAgent'
-if(isinstance(agent, AdvantageActorCriticAgent)):
-    agent_type = 'AdvantageActorCriticAgent'
-print('Agent is {:s}'.format(agent_type))
 
 # setup the epsilon range and decay rate for epsilon
 # define rewrad type and update frequency, see utils for more details
