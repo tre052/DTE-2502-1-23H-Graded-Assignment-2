@@ -157,7 +157,7 @@ class Agent():
         """
         if(buffer_size is not None):
             self._buffer_size = buffer_size
-        self._buffer = ReplayBufferNumpy(self._buffer_size, self._board_size, 
+        self._buffer = ReplayBufferNumpy(self._buffer_size, self._board_size,
                                     self._n_frames, self._n_actions)
 
     def get_buffer_size(self):
@@ -188,7 +188,7 @@ class Agent():
         legal_moves : Numpy array
             Binary indicators for actions which are allowed at next states
         """
-        self._buffer.add_to_buffer(board, action, reward, next_board, 
+        self._buffer.add_to_buffer(board, action, reward, next_board,
                                    done, legal_moves)
 
     def save_buffer(self, file_path='', iteration=None):
@@ -301,7 +301,8 @@ class DeepQLearningAgent(Agent):
 
         """ Reset all the models by creating new graphs"""
         self._model = self._agent_model().to(self.device)
-        self._optimizer = optim.RMSprop(self._model.parameters(), lr=0.0005)
+        self._optimizer = optim.Adam(self._model.parameters(), lr=0.0005)
+        self._loss_function = nn.SmoothL1Loss()
 
         if(self._use_target_net):
             self._target_net = self._agent_model().to(self.device)
@@ -568,34 +569,53 @@ class DeepQLearningAgent(Agent):
             loss : float
             The current error (error metric is defined in reset_models)
         """
+        current_target_model = self._target_net if self._use_target_net else self._model
         s, a, r, next_s, done, legal_moves = self._buffer.sample(batch_size)
-        if(reward_clip):
-            r = np.sign(r)
 
-        # calculate the discounted reward, and then train accordingly
-        current_model = self._target_net if self._use_target_net else self._model
-        next_model_outputs = self._get_model_outputs(next_s, current_model).cpu()
-        # our estimate of expexted future discounted reward
-        discounted_reward = r + \
-            (self._gamma * np.max(np.where(legal_moves==1, next_model_outputs, -np.inf), 
-                                  axis = 1)\
-                                  .reshape(-1, 1)) * (1-done)
-        # create the target variable, only the column with action has different value
+        s = self._prepare_input(s)
+        a = torch.tensor(a, dtype=torch.long).to(self.device)
+        r = torch.tensor(r, dtype=torch.float32).to(self.device)
+        next_s = self._prepare_input(next_s)
+        done = torch.tensor(done, dtype=torch.float32).to(self.device)
+        legal_moves = torch.tensor(legal_moves, dtype=torch.bool).to(self.device)
+        gamma_tensor = torch.tensor(self._gamma).to(self.device)
 
-        tensor_discounted_reward = torch.from_numpy(discounted_reward).float().to(self.device)
-        tensor_a = torch.from_numpy(a).float().to(self.device)
-        target = self._get_model_outputs(s)
+        if reward_clip:
+            r = torch.sign(r)
+
+        model_outputs = self._model(s)
+        next_model_outputs = current_target_model(next_s)
+
+        max_model_output_index = torch.argmax(torch.where(legal_moves, next_model_outputs, float("-inf")), dim=1)
+        max_model_output = next_model_outputs[torch.arange(next_model_outputs.size(0)), max_model_output_index]
+
+        expected_value = r.squeeze() + (gamma_tensor * max_model_output * (1 - done.squeeze()))
+
+        #expected_value_action_index = torch.argmax(torch.where(legal_moves, expected_value, float("-inf")), dim=1)
+        #next_q_value = expected_value[torch.arange(expected_value.size(0)), expected_value_action_index]
 
         # we bother only with the difference in reward estimate at the selected action
-        target = (1-tensor_a)*target + tensor_a*tensor_discounted_reward
+        #target = (1 - a) * model_outputs + a * discounted_rewards.unsqueeze(dim=1)
+
+        #target_action_action_index = torch.argmax(target, dim=1)
+        #target_q_value = target[torch.arange(target.size(0)), target_action_action_index]
+
+        #model_outputs_action_index = torch.argmax(a, dim=1)
+        #target_action_index = torch.argmax(torch.where(legal_moves, target, float("-inf")), dim=1)
+
+        #output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
+        #next_q_value = target[torch.arange(target.size(0)), target_action_index]
+        #print(model_outputs[0], output_q_value[0], model_outputs_action_index[0], a[0])
+        #print(target[0], next_q_value[0], target_action_index[0], target[0])
+
+        model_outputs_action_index = torch.argmax(a, dim=1)
+        output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
 
         self._model.train()
+
+        loss = self._loss_function(output_q_value, expected_value)
         self._optimizer.zero_grad()
-
-        output = self._get_model_outputs(s)
-        loss = mean_huber_loss(output, target)
         loss.backward()
-
         self._optimizer.step()
         return loss.item()
 
@@ -1165,147 +1185,147 @@ class DeepQLearningAgent(Agent):
 #         self._model.get_layer('action_values').set_weights(\
 #            [x/max_value for x in self._model.get_layer('action_values').get_weights()])
 #
-# class BreadthFirstSearchAgent(Agent):
-#     """
-#     finds the shortest path from head to food
-#     while avoiding the borders and body
-#     """
-#     def _get_neighbors(self, point, values, board):
-#         """
-#         point is a single integer such that
-#         row = point//self._board_size
-#         col = point%self._board_size
-#         """
-#         row, col = self._point_to_row_col(point)
-#         neighbors = []
-#         for delta_row, delta_col in [[-1,0], [1,0], [0,1], [0,-1]]:
-#             new_row, new_col = row + delta_row, col + delta_col
-#             if(board[new_row][new_col] in \
-#                [values['board'], values['food'], values['head']]):
-#                 neighbors.append(new_row*self._board_size + new_col)
-#         return neighbors
-#
-#     def _get_shortest_path(self, board, values):
-#         # get the head coordinate
-#         board = board[:,:,0]
-#         head = ((self._board_grid * (board == values['head'])).sum())
-#         points_to_search = deque()
-#         points_to_search.append(head)
-#         path = []
-#         row, col = self._point_to_row_col(head)
-#         distances = np.ones((self._board_size, self._board_size)) * np.inf
-#         distances[row][col] = 0
-#         visited = np.zeros((self._board_size, self._board_size))
-#         visited[row][col] = 1
-#         found = False
-#         while(not found):
-#             if(len(points_to_search) == 0):
-#                 # complete board has been explored without finding path
-#                 # take any arbitrary action
-#                 path = []
-#                 break
-#             else:
-#                 curr_point = points_to_search.popleft()
-#                 curr_row, curr_col = self._point_to_row_col(curr_point)
-#                 n = self._get_neighbors(curr_point, values, board)
-#                 if(len(n) == 0):
-#                     # no neighbors available, explore other paths
-#                     continue
-#                 # iterate over neighbors and calculate distances
-#                 for p in n:
-#                     row, col = self._point_to_row_col(p)
-#                     if(distances[row][col] > 1 + distances[curr_row][curr_col]):
-#                         # update shortest distance
-#                         distances[row][col] = 1 + distances[curr_row][curr_col]
-#                     if(board[row][col] == values['food']):
-#                         # reached food, break
-#                         found = True
-#                         break
-#                     if(visited[row][col] == 0):
-#                         visited[curr_row][curr_col] = 1
-#                         points_to_search.append(p)
-#         # create the path going backwards from the food
-#         curr_point = ((self._board_grid * (board == values['food'])).sum())
-#         path.append(curr_point)
-#         while(1):
-#             curr_row, curr_col = self._point_to_row_col(curr_point)
-#             if(distances[curr_row][curr_col] == np.inf):
-#                 # path is not possible
-#                 return []
-#             if(distances[curr_row][curr_col] == 0):
-#                 # path is complete
-#                 break
-#             n = self._get_neighbors(curr_point, values, board)
-#             for p in n:
-#                 row, col = self._point_to_row_col(p)
-#                 if(distances[row][col] != np.inf and \
-#                    distances[row][col] == distances[curr_row][curr_col] - 1):
-#                     path.append(p)
-#                     curr_point = p
-#                     break
-#         return path
-#
-#     def move(self, board, legal_moves, values):
-#         if(board.ndim == 3):
-#             board = board.reshape((1,) + board.shape)
-#         board_main = board.copy()
-#         a = np.zeros((board.shape[0],), dtype=np.uint8)
-#         for i in range(board.shape[0]):
-#             board = board_main[i,:,:,:]
-#             path = self._get_shortest_path(board, values)
-#             if(len(path) == 0):
-#                 a[i] = 1
-#                 continue
-#             next_head = path[-2]
-#             curr_head = (self._board_grid * (board[:,:,0] == values['head'])).sum()
-#             # get prev head position
-#             if(((board[:,:,0] == values['head']) + (board[:,:,0] == values['snake']) \
-#                 == (board[:,:,1] == values['head']) + (board[:,:,1] == values['snake'])).all()):
-#                 # we are at the first frame, snake position is unchanged
-#                 prev_head = curr_head - 1
-#             else:
-#                 # we are moving
-#                 prev_head = (self._board_grid * (board[:,:,1] == values['head'])).sum()
-#             curr_head_row, curr_head_col = self._point_to_row_col(curr_head)
-#             prev_head_row, prev_head_col = self._point_to_row_col(prev_head)
-#             next_head_row, next_head_col = self._point_to_row_col(next_head)
-#             dx, dy = next_head_col - curr_head_col, -next_head_row + curr_head_row
-#             if(dx == 1 and dy == 0):
-#                 a[i] = 0
-#             elif(dx == 0 and dy == 1):
-#                 a[i] = 1
-#             elif(dx == -1 and dy == 0):
-#                 a[i] = 2
-#             elif(dx == 0 and dy == -1):
-#                 a[i] = 3
-#             else:
-#                 a[i] = 0
-#         return a
-#         """
-#         d1 = (curr_head_row - prev_head_row, curr_head_col - prev_head_col)
-#         d2 = (next_head_row - curr_head_row, next_head_col - curr_head_col)
-#         # take cross product
-#         turn_dir = d1[0]*d2[1] - d1[1]*d2[0]
-#         if(turn_dir == 0):
-#             return 1
-#         elif(turn_dir == -1):
-#             return 0
-#         else:
-#             return 2
-#         """
-#
-#     def get_action_proba(self, board, values):
-#         """ for compatibility """
-#         move = self.move(board, values)
-#         prob = [0] * self._n_actions
-#         prob[move] = 1
-#         return prob
-#
-#     def _get_model_outputs(self, board=None, model=None):
-#         """ for compatibility """
-#         return [[0] * self._n_actions]
-#
-#     def load_model(self, **kwargs):
-#         """ for compatibility """
-#         pass
+class BreadthFirstSearchAgent(Agent):
+    """
+    finds the shortest path from head to food
+    while avoiding the borders and body
+    """
+    def _get_neighbors(self, point, values, board):
+        """
+        point is a single integer such that
+        row = point//self._board_size
+        col = point%self._board_size
+        """
+        row, col = self._point_to_row_col(point)
+        neighbors = []
+        for delta_row, delta_col in [[-1,0], [1,0], [0,1], [0,-1]]:
+            new_row, new_col = row + delta_row, col + delta_col
+            if(board[new_row][new_col] in \
+               [values['board'], values['food'], values['head']]):
+                neighbors.append(new_row*self._board_size + new_col)
+        return neighbors
+
+    def _get_shortest_path(self, board, values):
+        # get the head coordinate
+        board = board[:,:,0]
+        head = ((self._board_grid * (board == values['head'])).sum())
+        points_to_search = deque()
+        points_to_search.append(head)
+        path = []
+        row, col = self._point_to_row_col(head)
+        distances = np.ones((self._board_size, self._board_size)) * np.inf
+        distances[row][col] = 0
+        visited = np.zeros((self._board_size, self._board_size))
+        visited[row][col] = 1
+        found = False
+        while(not found):
+            if(len(points_to_search) == 0):
+                # complete board has been explored without finding path
+                # take any arbitrary action
+                path = []
+                break
+            else:
+                curr_point = points_to_search.popleft()
+                curr_row, curr_col = self._point_to_row_col(curr_point)
+                n = self._get_neighbors(curr_point, values, board)
+                if(len(n) == 0):
+                    # no neighbors available, explore other paths
+                    continue
+                # iterate over neighbors and calculate distances
+                for p in n:
+                    row, col = self._point_to_row_col(p)
+                    if(distances[row][col] > 1 + distances[curr_row][curr_col]):
+                        # update shortest distance
+                        distances[row][col] = 1 + distances[curr_row][curr_col]
+                    if(board[row][col] == values['food']):
+                        # reached food, break
+                        found = True
+                        break
+                    if(visited[row][col] == 0):
+                        visited[curr_row][curr_col] = 1
+                        points_to_search.append(p)
+        # create the path going backwards from the food
+        curr_point = ((self._board_grid * (board == values['food'])).sum())
+        path.append(curr_point)
+        while(1):
+            curr_row, curr_col = self._point_to_row_col(curr_point)
+            if(distances[curr_row][curr_col] == np.inf):
+                # path is not possible
+                return []
+            if(distances[curr_row][curr_col] == 0):
+                # path is complete
+                break
+            n = self._get_neighbors(curr_point, values, board)
+            for p in n:
+                row, col = self._point_to_row_col(p)
+                if(distances[row][col] != np.inf and \
+                   distances[row][col] == distances[curr_row][curr_col] - 1):
+                    path.append(p)
+                    curr_point = p
+                    break
+        return path
+
+    def move(self, board, legal_moves, values):
+        if(board.ndim == 3):
+            board = board.reshape((1,) + board.shape)
+        board_main = board.copy()
+        a = np.zeros((board.shape[0],), dtype=np.uint8)
+        for i in range(board.shape[0]):
+            board = board_main[i,:,:,:]
+            path = self._get_shortest_path(board, values)
+            if(len(path) == 0):
+                a[i] = 1
+                continue
+            next_head = path[-2]
+            curr_head = (self._board_grid * (board[:,:,0] == values['head'])).sum()
+            # get prev head position
+            if(((board[:,:,0] == values['head']) + (board[:,:,0] == values['snake']) \
+                == (board[:,:,1] == values['head']) + (board[:,:,1] == values['snake'])).all()):
+                # we are at the first frame, snake position is unchanged
+                prev_head = curr_head - 1
+            else:
+                # we are moving
+                prev_head = (self._board_grid * (board[:,:,1] == values['head'])).sum()
+            curr_head_row, curr_head_col = self._point_to_row_col(curr_head)
+            prev_head_row, prev_head_col = self._point_to_row_col(prev_head)
+            next_head_row, next_head_col = self._point_to_row_col(next_head)
+            dx, dy = next_head_col - curr_head_col, -next_head_row + curr_head_row
+            if(dx == 1 and dy == 0):
+                a[i] = 0
+            elif(dx == 0 and dy == 1):
+                a[i] = 1
+            elif(dx == -1 and dy == 0):
+                a[i] = 2
+            elif(dx == 0 and dy == -1):
+                a[i] = 3
+            else:
+                a[i] = 0
+        return a
+        """
+        d1 = (curr_head_row - prev_head_row, curr_head_col - prev_head_col)
+        d2 = (next_head_row - curr_head_row, next_head_col - curr_head_col)
+        # take cross product
+        turn_dir = d1[0]*d2[1] - d1[1]*d2[0]
+        if(turn_dir == 0):
+            return 1
+        elif(turn_dir == -1):
+            return 0
+        else:
+            return 2
+        """
+
+    def get_action_proba(self, board, values):
+        """ for compatibility """
+        move = self.move(board, values)
+        prob = [0] * self._n_actions
+        prob[move] = 1
+        return prob
+
+    def _get_model_outputs(self, board=None, model=None):
+        """ for compatibility """
+        return [[0] * self._n_actions]
+
+    def load_model(self, **kwargs):
+        """ for compatibility """
+        pass
 
