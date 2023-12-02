@@ -586,34 +586,17 @@ class DeepQLearningAgent(Agent):
         model_outputs = self._model(s)
         next_model_outputs = current_target_model(next_s)
 
-        max_model_output_index = torch.argmax(torch.where(legal_moves, next_model_outputs, float("-inf")), dim=1)
-        max_model_output = next_model_outputs[torch.arange(next_model_outputs.size(0)), max_model_output_index]
+        next_highest_q_index = torch.argmax(torch.where(legal_moves, next_model_outputs, float("-inf")), dim=1)
+        next_highest_q = next_model_outputs[torch.arange(next_model_outputs.size(0)), next_highest_q_index].unsqueeze(1)
 
-        expected_value = r.squeeze() + (gamma_tensor * max_model_output * (1 - done.squeeze()))
-
-        #expected_value_action_index = torch.argmax(torch.where(legal_moves, expected_value, float("-inf")), dim=1)
-        #next_q_value = expected_value[torch.arange(expected_value.size(0)), expected_value_action_index]
+        expected_values = r + (gamma_tensor * next_highest_q * (1 - done))
 
         # we bother only with the difference in reward estimate at the selected action
-        #target = (1 - a) * model_outputs + a * discounted_rewards.unsqueeze(dim=1)
-
-        #target_action_action_index = torch.argmax(target, dim=1)
-        #target_q_value = target[torch.arange(target.size(0)), target_action_action_index]
-
-        #model_outputs_action_index = torch.argmax(a, dim=1)
-        #target_action_index = torch.argmax(torch.where(legal_moves, target, float("-inf")), dim=1)
-
-        #output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
-        #next_q_value = target[torch.arange(target.size(0)), target_action_index]
-        #print(model_outputs[0], output_q_value[0], model_outputs_action_index[0], a[0])
-        #print(target[0], next_q_value[0], target_action_index[0], target[0])
-
-        model_outputs_action_index = torch.argmax(a, dim=1)
-        output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
+        target = (1 - a) * model_outputs + a * expected_values
 
         self._model.train()
 
-        loss = self._loss_function(output_q_value, expected_value)
+        loss = self._loss_function(model_outputs, target)
         self._optimizer.zero_grad()
         loss.backward()
         self._optimizer.step()
