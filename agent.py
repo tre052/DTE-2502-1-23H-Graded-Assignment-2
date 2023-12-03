@@ -246,11 +246,13 @@ class DeepQLearningAgent(Agent):
             print("CUDA not available. Running on CPU")
 
         """ Reset all the models by creating new graphs"""
+        # create a new DQN model, optimizer, and loss function
         self._model = self._agent_model().to(self.device)
         self._optimizer = optim.Adam(self._model.parameters(), lr=0.0005)
         self._loss_function = nn.SmoothL1Loss()
 
         if(self._use_target_net):
+            # create a new target network and update its weights
             self._target_net = self._agent_model().to(self.device)
             self.update_target_net()
 
@@ -267,6 +269,8 @@ class DeepQLearningAgent(Agent):
         board : Numpy array
             Processed and normalized board
         """
+        # when visualizing the board passed is only three dimensions. We make it into 4 dimensions
+        # during training we have a 4th dimension that denotes the number of samples. That is why it wants 4.
         if board.ndim == 3:
             board = board[np.newaxis, ...]
 
@@ -320,6 +324,7 @@ class DeepQLearningAgent(Agent):
         """
         # return board.copy()
         # return((board/128.0 - 1).copy())
+        # normalize the board by scaling values
         return board.astype(np.float32)/4.0
 
     def move(self, board, legal_moves, value=None):
@@ -350,12 +355,14 @@ class DeepQLearningAgent(Agent):
                 self._n_actions = n_actions
                 self._version = version
 
+                # load model configuration from a json file
                 with open('model_config/{:s}.json'.format(self._version), 'r') as f:
                     m = json.loads(f.read())
 
                 layers = []
                 prev_out_channels = 2
 
+                # build the neural network based on the configuration
                 for layer_name, layer_obj in m['model'].items():
                     if 'Conv2D' in layer_name:
                         layers.append(
@@ -396,6 +403,7 @@ class DeepQLearningAgent(Agent):
 
     def set_weights_trainable(self):
         """Set selected layers to non trainable and compile the model"""
+        # set all parameters of the model to non-trainable
         for param in self._model.parameters():
             param.requires_grad = False
         # the last dense layers should be trainable
@@ -419,6 +427,7 @@ class DeepQLearningAgent(Agent):
         model_outputs : Numpy array
             Action probabilities, shape is board.shape[0] * n_actions
         """
+        # get action probabilities using the DQN model
         model_outputs = self._get_model_outputs(board, self._model).cpu()
         # subtracting max and taking softmax does not change output
         # do this for numerical stability
@@ -445,6 +454,7 @@ class DeepQLearningAgent(Agent):
             assert isinstance(iteration, int), "iteration should be an integer"
         else:
             iteration = 0
+        # save the state dictionaries of the model and target network
         torch.save(self._model.state_dict(), "{}/model_{:04d}.h5".format(file_path, iteration))
         if(self._use_target_net):
             torch.save(self._target_net.state_dict(), "{}/model_{:04d}_target.h5".format(file_path, iteration))
@@ -471,6 +481,7 @@ class DeepQLearningAgent(Agent):
             assert isinstance(iteration, int), "iteration should be an integer"
         else:
             iteration = 0
+        # load the state dictionaries of the model and target network
         model_state_dict = torch.load("{}/model_{:04d}.h5".format(file_path, iteration))
         self._model.load_state_dict(model_state_dict)
         if(self._use_target_net):
@@ -480,6 +491,7 @@ class DeepQLearningAgent(Agent):
 
     def print_models(self):
         """Print the current models using summary method"""
+        # print the structure of the training model and the target network
         print('Training Model')
         summary(self._model)
         if(self._use_target_net):
@@ -515,9 +527,13 @@ class DeepQLearningAgent(Agent):
             loss : float
             The current error (error metric is defined in reset_models)
         """
+        # we check if target net is being used
         current_target_model = self._target_net if self._use_target_net else self._model
+
+        # buffer data. gives sample data for many states. this is what makes the code work in batches
         s, a, r, next_s, done, legal_moves = self._buffer.sample(batch_size)
 
+        #===========convert batched data into tensors================#
         s = self._prepare_input(s)
         a = torch.tensor(a, dtype=torch.long).to(self.device)
         r = torch.tensor(r, dtype=torch.float32).to(self.device)
@@ -525,44 +541,38 @@ class DeepQLearningAgent(Agent):
         done = torch.tensor(done, dtype=torch.float32).to(self.device)
         legal_moves = torch.tensor(legal_moves, dtype=torch.bool).to(self.device)
         gamma_tensor = torch.tensor(self._gamma).to(self.device)
+        #===========================================================#
 
         if reward_clip:
             r = torch.sign(r)
 
+        # model predictions based on the current state
         model_outputs = self._model(s)
+        # model predictions based on the next state
         next_model_outputs = current_target_model(next_s)
 
+        # calculate the index of the action with the max Q-value for the next state
         max_model_output_index = torch.argmax(torch.where(legal_moves, next_model_outputs, float("-inf")), dim=1)
+        # we get the next max Q-value using the index of the action
         max_model_output = next_model_outputs[torch.arange(next_model_outputs.size(0)), max_model_output_index]
 
+        # calculate the expected Q-values for the current state using the Bellman function
         expected_value = r.squeeze() + (gamma_tensor * max_model_output * (1 - done.squeeze()))
 
-        #expected_value_action_index = torch.argmax(torch.where(legal_moves, expected_value, float("-inf")), dim=1)
-        #next_q_value = expected_value[torch.arange(expected_value.size(0)), expected_value_action_index]
-
-        # we bother only with the difference in reward estimate at the selected action
-        #target = (1 - a) * model_outputs + a * discounted_rewards.unsqueeze(dim=1)
-
-        #target_action_action_index = torch.argmax(target, dim=1)
-        #target_q_value = target[torch.arange(target.size(0)), target_action_action_index]
-
-        #model_outputs_action_index = torch.argmax(a, dim=1)
-        #target_action_index = torch.argmax(torch.where(legal_moves, target, float("-inf")), dim=1)
-
-        #output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
-        #next_q_value = target[torch.arange(target.size(0)), target_action_index]
-        #print(model_outputs[0], output_q_value[0], model_outputs_action_index[0], a[0])
-        #print(target[0], next_q_value[0], target_action_index[0], target[0])
-
+        # select the Q-values corresponding to the chosen actions
         model_outputs_action_index = torch.argmax(a, dim=1)
         output_q_value = model_outputs[torch.arange(model_outputs.size(0)), model_outputs_action_index]
 
+        # set the model to training mode
         self._model.train()
 
+        # calculate the loss and perform a gradient descent step
         loss = self._loss_function(output_q_value, expected_value)
         self._optimizer.zero_grad()
         loss.backward()
         self._optimizer.step()
+
+        # we return the calculated loss
         return loss.item()
 
 
@@ -572,6 +582,7 @@ class DeepQLearningAgent(Agent):
         This should not be updated very frequently
         """
         if(self._use_target_net):
+            # update the target network weights
             self._target_net.load_state_dict(self._model.state_dict())
     def compare_weights(self):
         """Simple utility function to check if the model and target
@@ -587,6 +598,7 @@ class DeepQLearningAgent(Agent):
         """
         assert isinstance(agent_for_copy, self), "Agent type is required for copy"
 
+        # update weights by copying from another agent
         self._model.set_weights(agent_for_copy._model.get_weights())
         self._target_net.set_weights(agent_for_copy._model_pred.get_weights())
 
