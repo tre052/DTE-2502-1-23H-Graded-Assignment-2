@@ -12,13 +12,11 @@ import pandas as pd
 import time
 from utils import play_game, play_game2
 from game_environment import Snake, SnakeNumpy
-import tensorflow as tf
 from agent import DeepQLearningAgent, BreadthFirstSearchAgent  # , PolicyGradientAgent,\
 # AdvantageActorCriticAgent, mean_huber_loss
 import json
 
 # some global variables
-tf.random.set_seed(42)
 version = 'v17.1'
 
 # get training configurations

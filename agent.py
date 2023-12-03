@@ -7,65 +7,11 @@ import time
 import pickle
 from collections import deque
 import json
-import tensorflow as tf
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.optimizers import RMSprop, SGD, Adam
-import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Input, Conv2D, Flatten, Dense, Softmax, MaxPool2D
-from tensorflow.keras import Model
-from tensorflow.keras.regularizers import l2
 import torch
 from torchsummary import summary
 import torch.optim as optim
 import torch.nn as nn
-# from tensorflow.keras.losses import Huber
 
-def huber_loss(y_true, y_pred, delta=1):
-    """Keras implementation for huber loss
-    loss = {
-        0.5 * (y_true - y_pred)**2 if abs(y_true - y_pred) < delta
-        delta * (abs(y_true - y_pred) - 0.5 * delta) otherwise
-    }
-    Parameters
-    ----------
-    y_true : Tensor
-        The true values for the regression data
-    y_pred : Tensor
-        The predicted values for the regression data
-    delta : float, optional
-        The cutoff to decide whether to use quadratic or linear loss
-
-    Returns
-    -------
-    loss : Tensor
-        loss values for all points
-    """
-    error = (y_true - y_pred)
-    quad_error = 0.5*torch.square(error)
-    lin_error = delta*(torch.abs(error) - 0.5*delta)
-    # quadratic error, linear error
-    return torch.where(torch.abs(error) < delta, quad_error, lin_error)
-
-def mean_huber_loss(y_true, y_pred, delta=1):
-    """Calculates the mean value of huber loss
-
-    Parameters
-    ----------
-    y_true : Tensor
-        The true values for the regression data
-    y_pred : Tensor
-        The predicted values for the regression data
-    delta : float, optional
-        The cutoff to decide whether to use quadratic or linear loss
-
-    Returns
-    -------
-    loss : Tensor
-        average loss across points
-    """
-    y_true.requires_grad_(True)
-    y_pred.requires_grad_(True)
-    return torch.mean(huber_loss(y_true, y_pred, delta))
 
 class Agent():
     """Base class for all agents
