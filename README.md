@@ -1,3 +1,23 @@
+# Running Graded assignment 02. 
+
+### 1. Activate GA01 yaml conda environment
+
+command: "conda env create -f [completeEnv.yaml](../completeEnv.yaml)"
+
+command: "conda activate uitnn"
+
+### 2. Train the model (first runs 1 full iteration of BFS, then runs 300 iterations of DeepQ)
+
+command: "python [training.py](../training.py)"
+
+### 3. Test the model
+
+command: "python [game_visualization.py](../game_visualization.py)"
+
+# Additional dependencies
+
+None
+
 # Snake Reinforcement Learning
 
 Code for training a Deep Reinforcement Learning agent to play the game of Snake.
