@@ -23,7 +23,7 @@ with open('model_config/{:s}.json'.format(version), 'r') as f:
     obstacles = bool(m['obstacles'])
 
 iteration_list = [300000]
-max_time_limit = 398
+max_time_limit = 400
 
 # setup the environment
 env = Snake(board_size=board_size, frames=frames, max_time_limit=max_time_limit,

@@ -10,9 +10,13 @@ command: "conda activate uitnn"
 
 command: "python [training.py](../training.py)"
 
+The trained model and its checkpoints are found in the /models/ folder
+
 ### 3. Test the model
 
 command: "python [game_visualization.py](../game_visualization.py)"
+
+Game visualizations are output into the /output/ folder
 
 # Additional dependencies
 
