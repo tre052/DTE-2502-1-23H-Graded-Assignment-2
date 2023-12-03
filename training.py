@@ -33,7 +33,7 @@ with open('model_config/{:s}.json'.format(version), 'r') as f:
     buffer_size = m['buffer_size']
 
 # define no of episodes, logging frequency
-episodes = 10 * (10 ** 5)
+episodes = 3 * (10 ** 5)
 log_frequency = 1000
 games_eval = 8
 
@@ -59,25 +59,25 @@ if (agent_type in ['DeepQLearningAgent']):
     n_games_training = 8 * 16
     decay = 0.97
 
-    # bfs_agent = BreadthFirstSearchAgent(board_size=board_size, frames=frames, n_actions=n_actions,
-    #                                     buffer_size=buffer_size, version=version)
-    # for index in tqdm(range(1)):
-    #     env = SnakeNumpy(board_size=board_size, frames=frames, games=n_games_training,
-    #                      max_time_limit=max_time_limit, obstacles=obstacles, version=version)
-    #     n_actions = env.get_num_actions()
-    #
-    #     # make small changes to the buffer and slowly train
-    #     curr_time = time.time()
-    #     _, _, _ = play_game2(env, bfs_agent, n_actions, epsilon=-1,
-    #                     n_games=n_games_training, record=True,
-    #                     reward_type='current', frame_mode=True,
-    #                     total_frames=60000, stateful=True)
-    #
-    #     print('Buffer size {:d} filled in {:.2f}s'.format(bfs_agent.get_buffer_size(),
-    #                                                       time.time() - curr_time))
-    #     bfs_agent.save_buffer(file_path='models/{:s}'.format(version), iteration=index+1)
-    #
-    # agent.load_buffer(file_path='models/{:s}'.format(version), iteration=1)
+    bfs_agent = BreadthFirstSearchAgent(board_size=board_size, frames=frames, n_actions=n_actions,
+                                        buffer_size=buffer_size, version=version)
+    for index in tqdm(range(1)):
+        env = SnakeNumpy(board_size=board_size, frames=frames, games=n_games_training,
+                         max_time_limit=max_time_limit, obstacles=obstacles, version=version)
+        n_actions = env.get_num_actions()
+
+        # make small changes to the buffer and slowly train
+        curr_time = time.time()
+        _, _, _ = play_game2(env, bfs_agent, n_actions, epsilon=-1,
+                        n_games=n_games_training, record=True,
+                        reward_type='current', frame_mode=True,
+                        total_frames=60000, stateful=True)
+
+        print('Buffer size {:d} filled in {:.2f}s'.format(bfs_agent.get_buffer_size(),
+                                                          time.time() - curr_time))
+        bfs_agent.save_buffer(file_path='models/{:s}'.format(version), iteration=index+1)
+
+    agent.load_buffer(file_path='models/{:s}'.format(version), iteration=1)
 
     if (supervised):
         # lower the epsilon since some starting policy has already been trained
