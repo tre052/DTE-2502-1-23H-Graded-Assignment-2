@@ -1,19 +1,13 @@
 '''
 script for training the agent for snake using various methods
 '''
-# run on cpu
-import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
-import numpy as np
 from tqdm import tqdm
-from collections import deque
 import pandas as pd
 import time
 from utils import play_game, play_game2
 from game_environment import Snake, SnakeNumpy
 from agent import DeepQLearningAgent, BreadthFirstSearchAgent  # , PolicyGradientAgent,\
-# AdvantageActorCriticAgent, mean_huber_loss
 import json
 
 # some global variables
@@ -38,11 +32,6 @@ games_eval = 8
 # setup the agent
 agent = DeepQLearningAgent(board_size=board_size, frames=frames, n_actions=n_actions,
                            buffer_size=buffer_size, version=version)
-# agent = PolicyGradientAgent(board_size=board_size, frames=frames, n_actions=n_actions, 
-# buffer_size=2000, version=version)
-# agent = AdvantageActorCriticAgent(board_size=board_size, frames=frames, n_actions=n_actions, 
-# buffer_size=10000, version=version)
-# agent.print_models()
 
 # check in the same order as class hierarchy
 if (isinstance(agent, DeepQLearningAgent)):
@@ -84,22 +73,6 @@ if (agent_type in ['DeepQLearningAgent']):
         # or some other pretrained model
         agent.load_model(file_path='models/{:s}'.format(version))
         # agent.set_weights_trainable()
-if (agent_type in ['PolicyGradientAgent']):
-    epsilon, epsilon_end = -1, -1
-    reward_type = 'discounted_future'
-    sample_actions = True
-    exploration_threshold = 0.1
-    n_games_training = 16
-    decay = 1
-if (agent_type in ['AdvantageActorCriticAgent']):
-    epsilon, epsilon_end = -1, -1
-    reward_type = 'current'
-    sample_actions = True
-    exploration_threshold = 0.1
-    n_games_training = 32
-    decay = 1
-
-# decay = np.exp(np.log((epsilon_end/epsilon))/episodes)
 
 # use only for DeepQLearningAgent
 if (agent_type in ['DeepQLearningAgent']):
