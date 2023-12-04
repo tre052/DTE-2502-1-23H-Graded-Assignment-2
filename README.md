@@ -1,18 +1,12 @@
 # Running Graded assignment 02. 
 
-### 1. Activate GA01 yaml conda environment
-
-command: "conda env create -f [completeEnv.yaml](../completeEnv.yaml)"
-
-command: "conda activate uitnn"
-
-### 2. Train the model (first runs 1 full iteration of BFS, then runs 300 iterations of DeepQ)
+### 1. Train the model (first runs 1 full iteration of BFS, then runs 300 iterations of DeepQ)
 
 command: "python [training.py](../training.py)"
 
 The trained model and its checkpoints are found in the /models/ folder
 
-### 3. Test the model
+### 2. Test the model
 
 command: "python [game_visualization.py](../game_visualization.py)"
 
