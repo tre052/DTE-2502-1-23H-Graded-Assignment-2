@@ -35,10 +35,6 @@ n_actions = env.get_num_actions()
 # K.clear_session()
 agent = DeepQLearningAgent(board_size=board_size, frames=frames,
                            n_actions=n_actions, buffer_size=10, version=version)
-# agent = PolicyGradientAgent(board_size=board_size, frames=frames, n_actions=n_actions, buffer_size=10)
-# agent = AdvantageActorCriticAgent(board_size=board_size, frames=frames, n_actions=n_actions, buffer_size=10)
-# agent = HamiltonianCycleAgent(board_size=board_size, frames=frames, n_actions=n_actions, buffer_size=10)
-# agent = BreadthFirstSearchAgent(board_size=board_size, frames=frames, n_actions=n_actions, buffer_size=10)
 
 if not os.path.exists("output"):  # If the output folder does not exist, we make it.
     os.mkdir("output")
